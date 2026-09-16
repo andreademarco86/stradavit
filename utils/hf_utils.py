@@ -12,7 +12,7 @@ def push_trained_model_to_hub(
         output_dir: str,
         repo_id: str,
         private: bool = True,
-        use_auth_token: str | None = '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',
+        use_auth_token: str | None = 'hf_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
 ):
     """
     Convenience helper to export a finished run to the Hugging Face Hub.
