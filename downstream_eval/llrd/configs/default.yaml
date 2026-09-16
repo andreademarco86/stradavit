@@ -1,0 +1,316 @@
+{
+# Canonical LLRD evaluation config. This file is the default source of truth.
+# For ops runs, generate the same shape into a temporary YAML/JSON file and pass it with --config.
+  "description": "Canonical LLRD evaluation config. This is the source of truth for default runs; ops can pass another config file with the same shape.",
+# Run controls: select eval/dataset scope, output paths, trainer batch settings, folds, epochs, and LR sweep.
+  "run": {
+    # Evaluation mode: finetune, linear_probe, or all.
+    "eval_mode": "all",
+    # Dataset scope: rgz, mirabest, lotss_horton, or all. Individual datasets also have enabled flags below.
+    "dataset_mode": "all",
+    # Scratch root for temporary Trainer runs, Hugging Face cache, dataset index cache, and transient outputs.
+    # Delete this directory to clean evaluation temp files without deleting the persistent result cache below.
+    "work_dir": "downstream_eval/llrd/work",
+    # Transient output directory for generated per-run files.
+    "output_dir": "downstream_eval/llrd/work/outputs",
+    # Persistent backend result cache used by the portal/results tables.
+    "cache_json_path": "downstream_eval/llrd/outputs/finetune_results_cache_llrd.json",
+    # Use class-weighted cross entropy for imbalanced downstream datasets.
+    "use_class_weighted_loss": true,
+    # Reproducibility seed used for folds and trainer setup.
+    "global_seed": 0,
+    # Deterministic mode prioritizes repeatability while keeping a fixed input-pipeline shape:
+    # stable per-fold seeds, fixed 8 DataLoader workers with prefetch=2, strict deterministic
+    # Torch kernels, and TF32 disabled.
+    "deterministic_eval": true,
+    # Target global batch size; runtime may split this across devices/gradient accumulation.
+    "batch_size": 256,
+    # Optional fraction of each dataset to use. Use 1.0 for full evaluation.
+    "subsample_fraction": 1.0,
+    # Number of stratified folds per dataset/model/LR config.
+    "num_folds": 3,
+    # Finetune epochs. Linear probe uses the same epoch count unless changed in code.
+    "finetune_epochs": 20,
+    # AdamW weight decay for finetuning and linear probing.
+    "finetune_weight_decay": 0.05,
+    # Scheduler warmup ratios for finetune and linear probe modes.
+    "warmup_ratio_ft": 0.2,
+    "warmup_ratio_lp": 0.05,
+    # Gradient clipping norm.
+    "max_grad_norm": 1.0,
+    # Set to 1 to print sample layer-wise LR groups.
+    "debug_layer_decay": 1,
+    # LLRD sweep. bb_lr is the backbone LR, head_mult scales classifier LR, layer_decay applies per layer.
+    "lr_configs": [
+      {
+        "bb_lr": 0.0005,
+        "head_mult": 10.0,
+        "layer_decay": 0.65
+      }
+    ],
+    # Hugging Face cache path used by the runtime entrypoint.
+    "hf_cache_path": "downstream_eval/llrd/work/hf_cache"
+  },
+# Plot controls for generated comparison/ranking figures.
+  "plot": {
+    "min_inches_per_model": 6.0,
+    "inches_per_row": 4.0,
+    "fig_dpi": 300,
+    "max_models_per_row": 6,
+    "top_n_models": 60
+  },
+# Dataset definitions. key is used by dataset_mode; label is the cache/report label; root points at image data.
+# analysis_order, analysis_label, and class_order control analysis figure layout for that dataset.
+# RGZ index_cache settings are used when the dataset supports cached indexing.
+  "datasets": [
+    {
+      "key": "rgz",
+      "label": "RGZ",
+      "root": "data/rgz_dr1_data/cutouts_pad1.50_minpix8/",
+      "enabled": true,
+      "index_cache_dir": "downstream_eval/llrd/work/dataset_index_cache",
+      "index_workers": 4,
+      "analysis_order": 3,
+      "analysis_label": "RGZ DR1",
+      "class_order": [
+        "1c1p",
+        "1c2p",
+        "1c3p",
+        "2c2p",
+        "2c3p",
+        "3c3p"
+      ]
+    },
+    {
+      "key": "mirabest",
+      "label": "MiraBest",
+      "root": "data/mirabestv2/",
+      "enabled": true,
+      "index_cache_dir": "downstream_eval/llrd/work/dataset_index_cache",
+      "index_workers": 4,
+      "analysis_order": 1,
+      "analysis_label": "MiraBest",
+      "class_order": [
+        "FRI",
+        "FRII"
+      ]
+    },
+    {
+      "key": "lotss_horton",
+      "label": "LoTSS-Horton",
+      "root": "data/lotss_dr2_horton_hires_cutouts/",
+      "enabled": true,
+      "index_cache_dir": "downstream_eval/llrd/work/dataset_index_cache",
+      "index_workers": 4,
+      "analysis_order": 2,
+      "analysis_label": "LoTSS DR2",
+      "class_order": [
+        "FRI",
+        "FRII",
+        "Hybrid",
+        "Relaxed double",
+        "Spiral"
+      ]
+    }
+  ],
+# Models to evaluate. Every entry must include model_id, enabled, and analysis.
+# Trained model_id values must point at the new trainer output shape: ./Models/<run-name>/checkpoints.
+# alias and encoder are always derived from model_id by downstream_eval.llrd.model_config.
+# Models marked analysis=true are included in the analysis figures using their generated alias.
+  "models": [
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_only--stage=main--init=facebook-hf--loss=l2--lr=5e-4--proj=none--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_only--stage=main--init=facebook-hf--loss=l2_l1--lr=5e-4--proj=none--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_only--stage=main--init=facebook-hf--loss=l2_bl1--lr=5e-4--proj=none--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_only--stage=main--init=facebook-hf--loss=l2--lr=5e-4--proj=none--regs=4--nodinoenc--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_only--stage=main--init=facebook-hf--loss=l2_l1--lr=5e-4--proj=none--regs=4--nodinoenc--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_only--stage=main--init=facebook-hf--loss=l2_bl1--lr=5e-4--proj=none--regs=4--nodinoenc--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=contrastive_only--stage=main--init=facebook-hf--loss=hcl--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=none--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=contrastive_only--stage=main--init=facebook-hf--loss=soft_hcl--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=none--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=contrastive_only--stage=main--init=facebook-hf--loss=simclr--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=none--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=contrastive_only--stage=main--init=facebook-hf--loss=hcl--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=none--regs=4--nodinoenc--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=contrastive_only--stage=main--init=facebook-hf--loss=soft_hcl--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=none--regs=4--nodinoenc--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=contrastive_only--stage=main--init=facebook-hf--loss=simclr--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=none--regs=4--nodinoenc--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_then_contrastive--stage=phase2--init=mae-phase1--loss=hcl--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=l2--phase1_loss=l2--phase1_mask=0.75--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_then_contrastive--stage=phase2--init=mae-phase1--loss=soft_hcl--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=l2--phase1_loss=l2--phase1_mask=0.75--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_then_contrastive--stage=phase2--init=mae-phase1--loss=simclr--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=l2--phase1_loss=l2--phase1_mask=0.75--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_then_contrastive--stage=phase2--init=mae-phase1--loss=hcl--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=l2_l1--phase1_loss=l2_l1--phase1_mask=0.75--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_then_contrastive--stage=phase2--init=mae-phase1--loss=soft_hcl--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=l2_l1--phase1_loss=l2_l1--phase1_mask=0.75--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_then_contrastive--stage=phase2--init=mae-phase1--loss=simclr--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=l2_l1--phase1_loss=l2_l1--phase1_mask=0.75--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_then_contrastive--stage=phase2--init=mae-phase1--loss=hcl--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=l2_bl1--phase1_loss=l2_bl1--phase1_mask=0.75--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_then_contrastive--stage=phase2--init=mae-phase1--loss=soft_hcl--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=l2_bl1--phase1_loss=l2_bl1--phase1_mask=0.75--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_then_contrastive--stage=phase2--init=mae-phase1--loss=simclr--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=l2_bl1--phase1_loss=l2_bl1--phase1_mask=0.75--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_then_contrastive--stage=phase2--init=mae-phase1--loss=hcl--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=l2--phase1_loss=l2--phase1_mask=0.75--regs=4--nodinoenc--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_then_contrastive--stage=phase2--init=mae-phase1--loss=soft_hcl--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=l2--phase1_loss=l2--phase1_mask=0.75--regs=4--nodinoenc--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_then_contrastive--stage=phase2--init=mae-phase1--loss=simclr--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=l2--phase1_loss=l2--phase1_mask=0.75--regs=4--nodinoenc--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_then_contrastive--stage=phase2--init=mae-phase1--loss=hcl--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=l2_l1--phase1_loss=l2_l1--phase1_mask=0.75--regs=4--nodinoenc--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": true
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_then_contrastive--stage=phase2--init=mae-phase1--loss=soft_hcl--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=l2_l1--phase1_loss=l2_l1--phase1_mask=0.75--regs=4--nodinoenc--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_then_contrastive--stage=phase2--init=mae-phase1--loss=simclr--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=l2_l1--phase1_loss=l2_l1--phase1_mask=0.75--regs=4--nodinoenc--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_then_contrastive--stage=phase2--init=mae-phase1--loss=hcl--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=l2_bl1--phase1_loss=l2_bl1--phase1_mask=0.75--regs=4--nodinoenc--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_then_contrastive--stage=phase2--init=mae-phase1--loss=soft_hcl--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=l2_bl1--phase1_loss=l2_bl1--phase1_mask=0.75--regs=4--nodinoenc--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/vitmae-b-mode=mae_then_contrastive--stage=phase2--init=mae-phase1--loss=simclr--lr=5e-4--proj=mlp-L2-H2048-O128--prephase=l2_bl1--phase1_loss=l2_bl1--phase1_mask=0.75--regs=4--nodinoenc--views=2--patch=16--mask=0.75/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/dinov2-b-mode=contrastive_only--stage=main--init=dinov2-hf--loss=hcl--lr=1e-4--proj=mlp-L2-H2048-O128--prephase=none--views=2/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "./Models/dinov2withregisters-b-mode=contrastive_only--stage=main--init=dinov2-hf--loss=hcl--lr=1e-4--proj=mlp-L2-H2048-O128--prephase=none--regs=4--views=2/checkpoints",
+      "enabled": true,
+      "analysis": false
+    },
+    {
+      "model_id": "facebook/vit-mae-base",
+      "enabled": true,
+      "analysis": true
+    },
+    {
+      "model_id": "facebook/dinov2-small",
+      "enabled": true,
+      "analysis": true
+    },
+    {
+      "model_id": "facebook/dinov2-base",
+      "enabled": true,
+      "analysis": true
+    },
+    {
+      "model_id": "facebook/dinov2-with-registers-base",
+      "enabled": true,
+      "analysis": true
+    }
+  ],
+# Analysis figure controls. Dataset ordering/class ordering lives in the dataset definitions above.
+  "analysis": {
+    # Use compact table-style confusion matrices instead of the larger figure layout.
+    "compact_table_layout": false,
+    # Save combined LP+FT figure when both modes run.
+    "save_combined_lp_ft": true,
+    # Save individual LP/FT analysis plots; false keeps temporary files only for combined output.
+    "save_individual_mode_plots": false,
+    # Confusion matrix color map and normalization: none, true, pred, or all.
+    "cm_cmap_name": "Greys",
+    "cm_normalization": "true",
+    # Header font size for analysis figures.
+    "header_font_size": 14
+  }
+}
